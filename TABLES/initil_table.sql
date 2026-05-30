@@ -1,0 +1,416 @@
+/*============================================
+CREATE DATABASE
+=============================================*/
+
+CREATE DATABASE UPI_project;
+GO
+
+USE UPI_project;
+GO
+
+
+/*============================================
+SEQUENCES
+=============================================*/
+
+CREATE SEQUENCE UPI_project.SEQ_TRANSACTION_ID
+START WITH 100000
+INCREMENT BY 1;
+
+CREATE SEQUENCE trans_schema.SEQ_LOG_ID
+START WITH 1
+INCREMENT BY 1;
+
+GO
+
+
+/*============================================
+BANK
+=============================================*/
+
+CREATE TABLE trans_schema.BANK
+(
+    BANK_ID INT IDENTITY(1,1),
+
+    BANK_NAME VARCHAR(100) NOT NULL,
+
+    IFSC_CODE VARCHAR(11) NOT NULL,
+
+    CREATED_AT DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    UPDATED_AT DATETIME2,
+
+    IS_ACTIVE BIT
+        DEFAULT 1,
+
+    CONSTRAINT PK_BANK
+    PRIMARY KEY(BANK_ID),
+
+    CONSTRAINT UQ_BANK_IFSC
+    UNIQUE(IFSC_CODE)
+);
+
+GO
+
+
+/*============================================
+PERSON
+=============================================*/
+
+CREATE TABLE trans_schema.PERSON
+(
+    PERSON_ID BIGINT IDENTITY(1,1),
+
+    FIRST_NAME VARCHAR(50) NOT NULL,
+
+    LAST_NAME VARCHAR(50),
+
+    DOB DATE,
+
+    PHONE VARCHAR(10) NOT NULL,
+
+    EMAIL VARCHAR(100),
+
+    CREATED_AT DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    UPDATED_AT DATETIME2,
+
+    CONSTRAINT PK_PERSON
+    PRIMARY KEY(PERSON_ID),
+
+    CONSTRAINT UQ_PHONE UNIQUE(PHONE),
+
+    CONSTRAINT UQ_EMAIL UNIQUE(EMAIL)
+);
+
+GO
+
+
+/*============================================
+ADDRESS
+=============================================*/
+
+CREATE TABLE trans_schema.ADDRESS
+(
+    ADDRESS_ID BIGINT IDENTITY,
+
+    PERSON_ID BIGINT NOT NULL,
+
+    ADDRESS_LINE1 VARCHAR(200),
+
+    ADDRESS_LINE2 VARCHAR(200),
+
+    CITY VARCHAR(50),
+
+    STATE_NAME VARCHAR(50),
+
+    PINCODE VARCHAR(6),
+
+    CREATED_AT DATETIME2
+    DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_ADDRESS
+    PRIMARY KEY(ADDRESS_ID),
+
+    CONSTRAINT FK_ADDRESS_PERSON
+    FOREIGN KEY(PERSON_ID)
+    REFERENCES PERSON(PERSON_ID)
+);
+
+GO
+
+
+/============================================
+CUSTOMER
+=============================================/
+
+CREATE TABLE trans_schema.CUSTOMER
+(
+    CUSTOMER_ID BIGINT IDENTITY,
+
+    PERSON_ID BIGINT NOT NULL,
+
+    BANK_ID INT NOT NULL,
+
+    CUSTOMER_CODE VARCHAR(30),
+
+    KYC_STATUS VARCHAR(20)
+        DEFAULT 'PENDING',
+
+    CREATED_AT DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_CUSTOMER
+    PRIMARY KEY(CUSTOMER_ID),
+
+    CONSTRAINT FK_CUSTOMER_PERSON
+    FOREIGN KEY(PERSON_ID)
+    REFERENCES PERSON(PERSON_ID),
+
+    CONSTRAINT FK_CUSTOMER_BANK
+    FOREIGN KEY(BANK_ID)
+    REFERENCES BANK(BANK_ID)
+);
+
+GO
+
+
+/*============================================
+ACCOUNT
+=============================================*/
+
+CREATE TABLE trans_schema.ACCOUNT
+(
+    ACCOUNT_ID BIGINT IDENTITY,
+
+    CUSTOMER_ID BIGINT NOT NULL,
+
+    ACCOUNT_NO BIGINT NOT NULL,
+
+    ACCOUNT_TYPE VARCHAR(20),
+
+    ACCOUNT_STATUS VARCHAR(20)
+    DEFAULT 'ACTIVE',
+
+    CREATED_AT DATETIME2
+    DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_ACCOUNT
+    PRIMARY KEY(ACCOUNT_ID),
+
+    CONSTRAINT FK_ACCOUNT_CUSTOMER
+    FOREIGN KEY(CUSTOMER_ID)
+    REFERENCES CUSTOMER(CUSTOMER_ID),
+
+    CONSTRAINT UQ_ACCOUNT
+    UNIQUE(ACCOUNT_NO),
+
+    CONSTRAINT CHK_ACCOUNTTYPE
+    CHECK
+    (
+      ACCOUNT_TYPE IN
+      ('Savings','Current')
+    )
+);
+
+GO
+
+
+/*============================================
+BALANCE
+=============================================*/
+
+CREATE TABLE trans_schema.ACCOUNT_BALANCE
+(
+    ACCOUNT_ID BIGINT,
+
+    CURRENT_BALANCE DECIMAL(19,4)
+        DEFAULT 0,
+
+    LAST_UPDATED DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_BALANCE
+    PRIMARY KEY(ACCOUNT_ID),
+
+    CONSTRAINT FK_BALANCE
+    FOREIGN KEY(ACCOUNT_ID)
+    REFERENCES ACCOUNT(ACCOUNT_ID),
+
+    CONSTRAINT CHK_BAL
+    CHECK(CURRENT_BALANCE>=0)
+);
+
+GO
+
+
+/*============================================
+CARD
+=============================================*/
+
+CREATE TABLE trans_schema.CARD
+(
+    CARD_ID BIGINT IDENTITY,
+
+    ACCOUNT_ID BIGINT,
+
+    CARD_NUMBER CHAR(16),
+
+    CARD_TYPE VARCHAR(20),
+
+    EXPIRY_DATE DATE,
+
+    STATUS VARCHAR(20)
+        DEFAULT 'ACTIVE',
+
+    CONSTRAINT PK_CARD
+    PRIMARY KEY(CARD_ID),
+
+    CONSTRAINT FK_CARD_ACCOUNT
+    FOREIGN KEY(ACCOUNT_ID)
+    REFERENCES ACCOUNT(ACCOUNT_ID),
+
+    CONSTRAINT UQ_CARD
+    UNIQUE(CARD_NUMBER),
+
+    CONSTRAINT CHK_CARD
+    CHECK
+    (
+       CARD_TYPE
+       IN ('Debit','Credit')
+    )
+);
+
+GO
+
+
+/*============================================
+UPI
+=============================================*/
+
+CREATE TABLE trans_schema.UPI
+(
+    UPI_ID BIGINT IDENTITY,
+
+    ACCOUNT_ID BIGINT NOT NULL,
+
+    VPA VARCHAR(100) NOT NULL,
+
+    UPI_PIN_HASH VARBINARY(MAX),
+
+    CREATED_AT DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_UPI
+    PRIMARY KEY(UPI_ID),
+
+    CONSTRAINT FK_UPI_ACCOUNT
+    FOREIGN KEY(ACCOUNT_ID)
+    REFERENCES ACCOUNT(ACCOUNT_ID),
+
+    CONSTRAINT UQ_VPA
+    UNIQUE(VPA),
+
+    CONSTRAINT CHK_VPA
+    CHECK
+    (
+      VPA NOT LIKE '[0-9]%'
+      AND VPA NOT LIKE '% %'
+      AND VPA LIKE '%@%'
+    )
+);
+
+GO
+
+
+
+/*============================================
+TRANSACTION_MASTER
+=============================================*/
+
+CREATE TABLE trans_schema.TRANSACTION_MASTER
+(
+    TRANS_ID BIGINT
+        DEFAULT NEXT VALUE FOR
+        SEQ_TRANSACTION_ID,
+
+    FROM_UPI_ID BIGINT,
+
+    TO_UPI_ID BIGINT,
+
+    AMOUNT DECIMAL(19,4),
+
+    TRANSACTION_DATE DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    STATUS VARCHAR(20),
+
+    REFERENCE_NUMBER
+    UNIQUEIDENTIFIER
+    DEFAULT NEWID(),
+
+    CONSTRAINT PK_TRANSACTION
+    PRIMARY KEY(TRANS_ID),
+
+    CONSTRAINT FK_FROM
+    FOREIGN KEY(FROM_UPI_ID)
+    REFERENCES UPI(UPI_ID),
+
+    CONSTRAINT FK_TO
+    FOREIGN KEY(TO_UPI_ID)
+    REFERENCES UPI(UPI_ID),
+
+    CONSTRAINT CHK_LIMIT
+    CHECK
+    (
+        AMOUNT>0
+        AND
+        AMOUNT<=100000
+    ),
+
+    CONSTRAINT CHK_STATUS
+    CHECK
+    (
+       STATUS IN
+       (
+        'SUCCESS',
+        'FAILED',
+        'PENDING'
+       )
+    )
+);
+
+GO
+
+
+/*============================================
+TRANSACTION_LOG
+=============================================*/
+
+CREATE TABLE trans_schema.TRANSACTION_LOG
+(
+    LOG_ID BIGINT
+        DEFAULT NEXT VALUE FOR
+        SEQ_LOG_ID,
+
+    TRANS_ID BIGINT,
+
+    LOG_MESSAGE
+    VARCHAR(500),
+
+    LOG_DATE DATETIME2
+        DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_LOG
+    PRIMARY KEY(LOG_ID),
+
+    CONSTRAINT FK_LOG_TRANS
+    FOREIGN KEY(TRANS_ID)
+    REFERENCES TRANSACTION_MASTER
+    (
+        TRANS_ID
+    )
+);
+
+GO
+
+
+/============================================
+INDEXES
+=============================================/
+
+CREATE INDEX IX_VPA
+ON UPI(VPA);
+
+CREATE INDEX IX_ACCOUNTNO
+ON ACCOUNT(ACCOUNT_NO);
+
+CREATE INDEX IX_TRANSACTION_DATE
+ON TRANSACTION_MASTER
+(
+TRANSACTION_DATE
+);
+
+GO
